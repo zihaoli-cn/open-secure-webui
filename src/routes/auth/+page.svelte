@@ -58,6 +58,15 @@
 
 	const signInHandler = async () => {
 		const sessionUser = await userSignIn(email, password).catch((error) => {
+			// 检查是否是密码过期错误
+			if (error === "PASSWORD_EXPIRED") {
+				// 保存邮箱和密码到localStorage，以便在修改密码后自动登录
+				localStorage.setItem('expired_email', email);
+				localStorage.setItem('expired_password', password);
+				// 跳转到修改密码页面
+				goto('/auth/change-password');
+				return null;
+			}
 			toast.error(`${error}`);
 			return null;
 		});

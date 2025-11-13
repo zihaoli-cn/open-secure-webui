@@ -61,7 +61,8 @@ from open_webui.utils import logger
 from open_webui.utils.audit import AuditLevel, AuditLoggingMiddleware
 
 from open_webui.utils.database_audit import DatabaseAuditMiddleware  
-  
+from open_webui.utils.security_middleware import LoginSecurityMiddleware
+
 from open_webui.utils.logger import start_logger
 from open_webui.socket.main import (
     app as socket_app,
@@ -1267,6 +1268,7 @@ if ENABLE_COMPRESSION_MIDDLEWARE:
 
 app.add_middleware(RedirectMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(LoginSecurityMiddleware)
 
 
 @app.middleware("http")
