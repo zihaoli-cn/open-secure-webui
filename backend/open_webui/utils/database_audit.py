@@ -19,9 +19,9 @@ from loguru import logger
 from starlette.requests import Request
 
 from open_webui.internal.db import get_db
-from open_webui.models.audit_log import AuditLog
+from open_webui.models.audit_log import AuditLog, AuditConfig
 from open_webui.models.users import UserModel
-from open_webui.utils.auth import get_current_user, get_http_authorization_cred  
+from open_webui.utils.auth import get_current_user, get_http_authorization_cred
 
 
 class AuditContext:
@@ -59,7 +59,7 @@ class AuditContext:
             self.response_body.clear()
         self._request_size = 0
         self._response_size = 0
-        self.metadata.clear()  
+        self.metadata.clear()
 
 
 class DatabaseAuditMiddleware:
@@ -78,12 +78,6 @@ class DatabaseAuditMiddleware:
         "client_secret", "bearer", "credential", "auth"
     ]
 
-    # 速率限制配置
-    RATE_LIMIT_WINDOW = 60  # 时间窗口（秒）
-    RATE_LIMIT_MAX_REQUESTS = 100  # 每个窗口最大请求数
-    RATE_LIMIT_BY_IP = True  # 是否按IP进行速率限制
-    RATE_LIMIT_BY_USER = True  # 是否按用户进行速率限制
-
     def __init__(
         self,
         app: ASGI3Application,
@@ -95,7 +89,56 @@ class DatabaseAuditMiddleware:
         self.excluded_paths = excluded_paths or []
         self.max_body_size = max_body_size
         # 速率限制跟踪
-        self._rate_limit_tracker = defaultdict(list)  
+        self._rate_limit_tracker = defaultdict(list)
+        # 初始化安全配置
+        self._init_config()
+        
+    def _init_config(self):
+        """从数据库初始化配置参数，如果不存在则使用默认值"""
+        config_defaults = {
+            "AUDIT_RATE_LIMIT_WINDOW": ("60", "审计速率限制时间窗口（秒）"),
+            "AUDIT_RATE_LIMIT_MAX_REQUESTS": ("100", "每个窗口最大请求数"),
+            "AUDIT_RATE_LIMIT_BY_IP": ("true", "是否按IP进行速率限制"),
+            "AUDIT_RATE_LIMIT_BY_USER": ("true", "是否按用户进行速率限制")
+        }
+        
+        try:
+            with get_db() as db:
+                for key, (default_value, description) in config_defaults.items():
+                    config = db.query(AuditConfig).filter(AuditConfig.key == key).first()
+                    if not config:
+                        # 如果配置不存在，创建默认配置
+                        config = AuditConfig(
+                            id=str(uuid.uuid4()),
+                            key=key,
+                            value=default_value,
+                            description=description,
+                            is_active=True
+                        )
+                        db.add(config)
+                        db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to initialize audit configs: {e}")
+            
+    def _get_security_config(self, key: str, default_value: Any) -> Any:
+        """从数据库获取安全配置，如果没有则使用默认值"""
+        try:
+            with get_db() as db:
+                config = db.query(AuditConfig).filter(AuditConfig.key == key).first()
+                # 检查 is_active 是否为激活状态（兼容整数和布尔类型）
+                is_active = config.is_active if isinstance(config.is_active, bool) else config.is_active == 1
+                if config and is_active:
+                    # 尝试转换为合适的类型
+                    if isinstance(default_value, int):
+                        return int(config.value)
+                    elif isinstance(default_value, bool):
+                        return config.value.lower() in ['true', '1', 'yes', 'on']
+                    else:
+                        return config.value
+        except Exception as e:
+            logger.warning(f"Failed to get security config for {key}: {e}")
+            
+        return default_value
       
     async def __call__(  
         self,  
@@ -232,43 +275,49 @@ class DatabaseAuditMiddleware:
         """检查速率限制，返回True如果超过限制"""
         current_time = time.time()
 
+        # 获取速率限制配置
+        rate_limit_window = self._get_security_config("AUDIT_RATE_LIMIT_WINDOW", 60)
+        rate_limit_max_requests = self._get_security_config("AUDIT_RATE_LIMIT_MAX_REQUESTS", 100)
+        rate_limit_by_ip = self._get_security_config("AUDIT_RATE_LIMIT_BY_IP", True)
+        rate_limit_by_user = self._get_security_config("AUDIT_RATE_LIMIT_BY_USER", True)
+
         # 清理过期的请求记录
-        self._cleanup_rate_limit_tracker(current_time)
+        self._cleanup_rate_limit_tracker(current_time, rate_limit_window)
 
         # 按IP进行速率限制
-        if self.RATE_LIMIT_BY_IP:
+        if rate_limit_by_ip:
             client_ip = request.client.host if request.client else "unknown"
             ip_key = f"ip:{client_ip}"
-            if self._is_rate_limited(ip_key, current_time):
+            if self._is_rate_limited(ip_key, current_time, rate_limit_window, rate_limit_max_requests):
                 logger.warning(f"Rate limit exceeded for IP: {client_ip}")
                 return True
 
         # 按用户进行速率限制
-        if self.RATE_LIMIT_BY_USER and user:
+        if rate_limit_by_user and user:
             user_key = f"user:{user.id}"
-            if self._is_rate_limited(user_key, current_time):
+            if self._is_rate_limited(user_key, current_time, rate_limit_window, rate_limit_max_requests):
                 logger.warning(f"Rate limit exceeded for user: {user.id}")
                 return True
 
         return False
 
-    def _is_rate_limited(self, key: str, current_time: float) -> bool:
+    def _is_rate_limited(self, key: str, current_time: float, window: int, max_requests: int) -> bool:
         """检查特定键是否超过速率限制"""
         # 清理当前键的过期记录
         self._rate_limit_tracker[key] = [
             timestamp for timestamp in self._rate_limit_tracker[key]
-            if current_time - timestamp < self.RATE_LIMIT_WINDOW
+            if current_time - timestamp < window
         ]
 
         # 检查是否超过限制
-        if len(self._rate_limit_tracker[key]) >= self.RATE_LIMIT_MAX_REQUESTS:
+        if len(self._rate_limit_tracker[key]) >= max_requests:
             return True
 
         # 添加当前请求时间戳
         self._rate_limit_tracker[key].append(current_time)
         return False
 
-    def _cleanup_rate_limit_tracker(self, current_time: float):
+    def _cleanup_rate_limit_tracker(self, current_time: float, window: int):
         """清理速率限制跟踪器中过期的记录"""
         # 定期清理整个跟踪器（每100次请求清理一次，避免性能问题）
         cleanup_interval = 100
@@ -278,7 +327,7 @@ class DatabaseAuditMiddleware:
                 # 清理每个键的过期时间戳
                 self._rate_limit_tracker[key] = [
                     ts for ts in timestamps
-                    if current_time - ts < self.RATE_LIMIT_WINDOW
+                    if current_time - ts < window
                 ]
                 # 如果键为空，标记为待删除
                 if not self._rate_limit_tracker[key]:
