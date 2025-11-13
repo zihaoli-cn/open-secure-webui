@@ -59,6 +59,9 @@ from starsessions.stores.redis import RedisStore
 
 from open_webui.utils import logger
 from open_webui.utils.audit import AuditLevel, AuditLoggingMiddleware
+
+from open_webui.utils.database_audit import DatabaseAuditMiddleware  
+  
 from open_webui.utils.logger import start_logger
 from open_webui.socket.main import (
     app as socket_app,
@@ -438,6 +441,7 @@ from open_webui.env import (
     LICENSE_KEY,
     AUDIT_EXCLUDED_PATHS,
     AUDIT_LOG_LEVEL,
+    ENABLE_DATABASE_AUDIT,
     CHANGELOG,
     REDIS_URL,
     REDIS_CLUSTER,
@@ -1359,19 +1363,28 @@ if SCIM_ENABLED:
     app.include_router(scim.router, prefix="/api/v1/scim/v2", tags=["scim"])
 
 
-try:
-    audit_level = AuditLevel(AUDIT_LOG_LEVEL)
-except ValueError as e:
-    logger.error(f"Invalid audit level: {AUDIT_LOG_LEVEL}. Error: {e}")
-    audit_level = AuditLevel.NONE
-
-if audit_level != AuditLevel.NONE:
-    app.add_middleware(
-        AuditLoggingMiddleware,
-        audit_level=audit_level,
-        excluded_paths=AUDIT_EXCLUDED_PATHS,
-        max_body_size=MAX_BODY_LOG_SIZE,
+if ENABLE_DATABASE_AUDIT:
+    app.add_middleware(  
+        DatabaseAuditMiddleware,  
+        excluded_paths=AUDIT_EXCLUDED_PATHS,  
+        max_body_size=MAX_BODY_LOG_SIZE,  
     )
+else:
+    try:
+        audit_level = AuditLevel(AUDIT_LOG_LEVEL)
+    except ValueError as e:
+        log.error(f"Invalid audit level: {AUDIT_LOG_LEVEL}. Error: {e}")
+        audit_level = AuditLevel.NONE
+
+    if audit_level != AuditLevel.NONE:
+        app.add_middleware(
+            AuditLoggingMiddleware,
+            audit_level=audit_level,
+            excluded_paths=AUDIT_EXCLUDED_PATHS,
+            max_body_size=MAX_BODY_LOG_SIZE,
+        )
+
+
 ##################################
 #
 # Chat Endpoints

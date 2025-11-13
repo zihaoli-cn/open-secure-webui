@@ -732,6 +732,8 @@ AUDIT_EXCLUDED_PATHS = [path.strip() for path in AUDIT_EXCLUDED_PATHS]
 AUDIT_EXCLUDED_PATHS = [path.lstrip("/") for path in AUDIT_EXCLUDED_PATHS]
 
 
+ENABLE_DATABASE_AUDIT = os.environ.get("ENABLE_DATABASE_AUDIT", "True").lower() == "true"
+
 ####################################
 # OPENTELEMETRY
 ####################################
