@@ -15,13 +15,19 @@ from asgiref.typing import (
     ASGISendEvent,
     Scope as ASGIScope,
 )
-from loguru import logger
+import logging
 from starlette.requests import Request
+
+from open_webui.env import SRC_LOG_LEVELS
 
 from open_webui.internal.db import get_db
 from open_webui.models.audit_log import AuditLog, AuditConfig
 from open_webui.models.users import UserModel
 from open_webui.utils.auth import get_current_user, get_http_authorization_cred
+
+logger = logging.getLogger(__name__)
+logger.setLevel(SRC_LOG_LEVELS["MAIN"])
+
 
 
 class AuditContext:
@@ -137,7 +143,8 @@ class DatabaseAuditMiddleware:
                             logger.warning(f"Failed to convert config {key} value '{config.value}' to int, using default {default_value}")
                             return default_value
                     elif isinstance(default_value, bool):
-                        return config.value.lower() in ['true', '1', 'yes', 'on']
+                        # 对于布尔值，需要特殊处理
+                        return str(config.value).lower() in ['true', '1', 'yes', 'on']
                     else:
                         return config.value
         except Exception as e:
@@ -204,9 +211,12 @@ class DatabaseAuditMiddleware:
         try:
             # 使用正确的参数调用 get_current_user
             # 参考 audit.py 的实现，传递 None 作为 response 和 background_tasks
-            user = await get_current_user(
-                request, None, None, get_http_authorization_cred(auth_header)
-            )
+            cred = get_http_authorization_cred(auth_header)
+            if cred is None:
+                logger.debug("Invalid Authorization header")
+                return None
+            user = await get_current_user(request, None, None, cred)
+            logger.debug(f"Authenticated user: {user}")
             return user
         except Exception as e:
             logger.debug(f"Failed to get authenticated user: {str(e)}")
