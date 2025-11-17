@@ -113,7 +113,7 @@ class DatabaseAuditMiddleware:
                             key=key,
                             value=default_value,
                             description=description,
-                            is_active=True
+                            is_active=1  # 使用整数1表示激活状态
                         )
                         db.add(config)
                         db.commit()
