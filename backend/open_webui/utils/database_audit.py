@@ -130,7 +130,12 @@ class DatabaseAuditMiddleware:
                 if config and is_active:
                     # 尝试转换为合适的类型
                     if isinstance(default_value, int):
-                        return int(config.value)
+                        try:
+                            return int(config.value)
+                        except ValueError:
+                            # 如果转换失败，记录警告并返回默认值
+                            logger.warning(f"Failed to convert config {key} value '{config.value}' to int, using default {default_value}")
+                            return default_value
                     elif isinstance(default_value, bool):
                         return config.value.lower() in ['true', '1', 'yes', 'on']
                     else:
