@@ -1313,11 +1313,11 @@ async def inspect_websocket(request: Request, call_next):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ALLOW_ORIGIN,
+    allow_origins=["*"],  # 允许前端源
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    allow_methods=["*"],  # 允许所有方法（包括 OPTIONS）
+    allow_headers=["*"],  # 允许所有请求头
+ )
 
 
 app.mount("/ws", socket_app)
