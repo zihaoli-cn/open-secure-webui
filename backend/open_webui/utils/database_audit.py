@@ -215,7 +215,7 @@ class DatabaseAuditMiddleware:
             if cred is None:
                 logger.debug("Invalid Authorization header")
                 return None
-            user = await get_current_user(request, None, None, cred)
+            user = get_current_user(request, None, None, cred)
             logger.debug(f"Authenticated user: {user}")
             return user
         except Exception as e:
