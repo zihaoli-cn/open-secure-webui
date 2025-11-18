@@ -2,6 +2,7 @@ import re
 import uuid  
 import time  
 from typing import Optional, cast, MutableMapping  
+import logging
 from contextlib import asynccontextmanager  
   
 from asgiref.typing import (  
@@ -12,15 +13,20 @@ from asgiref.typing import (
     ASGISendEvent,  
     Scope as ASGIScope,  
 )  
-from loguru import logger  
+
 from starlette.requests import Request  
 from starlette.responses import JSONResponse  
 import json  
-  
+
+from open_webui.env import SRC_LOG_LEVELS
 from open_webui.internal.db import get_db  
 from open_webui.models.security import UserIPWhitelist, LoginAttempt, UserLockStatus, PasswordPolicy, SecurityConfig  
 from open_webui.models.users import Users  
   
+  
+logger = logging.getLogger(__name__)
+logger.setLevel(SRC_LOG_LEVELS["MAIN"])
+
   
 class LoginSecurityMiddleware:  
     """  
