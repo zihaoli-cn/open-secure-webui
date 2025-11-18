@@ -37,6 +37,7 @@ from open_webui.env import SRC_LOG_LEVELS, STATIC_DIR
 
 from open_webui.utils.auth import get_admin_user, get_password_hash, get_verified_user
 from open_webui.utils.access_control import get_permissions, has_permission
+from open_webui.utils.security import enforce_password_expiry_check, update_password_timestamp
 
 
 log = logging.getLogger(__name__)
@@ -471,9 +472,15 @@ async def update_user_by_id(
                 )
 
         if form_data.password:
+            # Check if the target user's password has expired before allowing admin to update it
+            enforce_password_expiry_check(user.email)
+
             hashed = get_password_hash(form_data.password)
             log.debug(f"hashed: {hashed}")
             Auths.update_user_password_by_id(user_id, hashed)
+
+            # Update password timestamp after successful password change
+            update_password_timestamp(user.email)
 
         Auths.update_email_by_id(user_id, form_data.email.lower())
         updated_user = Users.update_user_by_id(

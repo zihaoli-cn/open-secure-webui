@@ -49,6 +49,7 @@ from open_webui.utils.auth import (
     get_password_hash,
     get_http_authorization_cred,
 )
+from open_webui.utils.security import enforce_password_expiry_check, update_password_timestamp
 from open_webui.utils.webhook import post_webhook
 from open_webui.utils.access_control import get_permissions
 
@@ -169,11 +170,20 @@ async def update_password(
     if WEBUI_AUTH_TRUSTED_EMAIL_HEADER:
         raise HTTPException(400, detail=ERROR_MESSAGES.ACTION_PROHIBITED)
     if session_user:
+        # Check if user's password has expired before allowing password change
+        enforce_password_expiry_check(session_user.email)
+
         user = Auths.authenticate_user(session_user.email, form_data.password)
 
         if user:
             hashed = get_password_hash(form_data.new_password)
-            return Auths.update_user_password_by_id(user.id, hashed)
+            result = Auths.update_user_password_by_id(user.id, hashed)
+
+            # Update password timestamp after successful password change
+            if result:
+                update_password_timestamp(session_user.email)
+
+            return result
         else:
             raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_PASSWORD)
     else:
@@ -618,6 +628,8 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
         )
 
         if user:
+            # Update password timestamp for new user
+            update_password_timestamp(user.email)
             expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
             expires_at = None
             if expires_delta:
@@ -774,6 +786,8 @@ async def add_user(form_data: AddUserForm, user=Depends(get_admin_user)):
         )
 
         if user:
+            # Update password timestamp for new user
+            update_password_timestamp(user.email)
             token = create_token(data={"id": user.id})
             return {
                 "token": token,
