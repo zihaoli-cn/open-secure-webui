@@ -1,7 +1,23 @@
 import axios from 'axios'
 
+// 自动检测 API 基础 URL
+const getBaseURL = () => {
+  // 优先使用环境变量
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+  
+  // 生产环境使用相对路径（通过 nginx 代理）
+  if (import.meta.env.PROD) {
+    return '/api'
+  }
+  
+  // 开发环境默认使用 localhost
+  return 'http://localhost:3001/api'
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api',
+  baseURL: getBaseURL(),
   timeout: 10000
 })
 
