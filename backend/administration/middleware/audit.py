@@ -104,31 +104,34 @@ class AuditMiddleware(BaseHTTPMiddleware):
             
             # 使用原始SQL插入审计日志
             with next(get_db()) as db:
+                timestamp = int(time.time())
                 db.execute(
                     text("""
                         INSERT INTO audit_logs (
-                            id, user_id, username, action, resource_type, resource_id,
-                            details, ip_address, user_agent, created_at
+                            id, timestamp, user_id, user_name, user_email, user_role,
+                            verb, request_uri, response_status_code, source_ip,
+                            user_agent, request_object, processing_time, created_at
                         ) VALUES (
-                            :id, :user_id, :username, :action, :resource_type, :resource_id,
-                            :details, :ip_address, :user_agent, :created_at
+                            :id, :timestamp, :user_id, :user_name, :user_email, :user_role,
+                            :verb, :request_uri, :response_status_code, :source_ip,
+                            :user_agent, :request_object, :processing_time, :created_at
                         )
                     """),
                     {
                         "id": str(uuid.uuid4()),
+                        "timestamp": timestamp,
                         "user_id": kwargs.get("user_id"),
-                        "username": kwargs.get("user_name"),
-                        "action": kwargs.get("verb"),
-                        "resource_type": "api",
-                        "resource_id": kwargs.get("request_uri"),
-                        "details": json.dumps({
-                            "status_code": kwargs.get("response_status_code"),
-                            "processing_time": kwargs.get("processing_time"),
-                            "request_body": kwargs.get("request_object")
-                        }),
-                        "ip_address": kwargs.get("source_ip"),
+                        "user_name": kwargs.get("user_name"),
+                        "user_email": kwargs.get("user_email"),
+                        "user_role": kwargs.get("user_role"),
+                        "verb": kwargs.get("verb"),
+                        "request_uri": kwargs.get("request_uri"),
+                        "response_status_code": kwargs.get("response_status_code"),
+                        "source_ip": kwargs.get("source_ip"),
                         "user_agent": kwargs.get("user_agent"),
-                        "created_at": int(time.time())
+                        "request_object": kwargs.get("request_object"),
+                        "processing_time": kwargs.get("processing_time"),
+                        "created_at": timestamp
                     }
                 )
                 db.commit()
@@ -155,26 +158,30 @@ class AdminAuditLogger:
             import uuid
             
             with next(get_db()) as db:
+                timestamp = int(time.time())
+                # 将resource_type和resource_id合并到request_uri
+                request_uri = f"{resource_type}:{resource_id}" if resource_id else resource_type
                 db.execute(
                     text("""
                         INSERT INTO audit_logs (
-                            id, user_id, username, action, resource_type, resource_id,
-                            details, ip_address, created_at
+                            id, timestamp, user_id, user_name, user_role,
+                            verb, request_uri, source_ip, request_object, created_at
                         ) VALUES (
-                            :id, :user_id, :username, :action, :resource_type, :resource_id,
-                            :details, :ip_address, :created_at
+                            :id, :timestamp, :user_id, :user_name, :user_role,
+                            :verb, :request_uri, :source_ip, :request_object, :created_at
                         )
                     """),
                     {
                         "id": str(uuid.uuid4()),
+                        "timestamp": timestamp,
                         "user_id": user_id,
-                        "username": username,
-                        "action": action,
-                        "resource_type": resource_type,
-                        "resource_id": resource_id,
-                        "details": details,
-                        "ip_address": ip_address,
-                        "created_at": int(time.time())
+                        "user_name": username,
+                        "user_role": user_role,
+                        "verb": action,
+                        "request_uri": request_uri,
+                        "source_ip": ip_address,
+                        "request_object": details,
+                        "created_at": timestamp
                     }
                 )
                 db.commit()

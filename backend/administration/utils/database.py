@@ -10,7 +10,7 @@ from config import settings
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 创建数据库引擎
+# 创建数据库引擎（三员管理系统自己的数据库）
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
@@ -18,8 +18,17 @@ engine = create_engine(
     echo=settings.DEBUG
 )
 
+# 创建 OpenWebUI 数据库引擎（只读，用于读取审计日志）
+openwebui_engine = create_engine(
+    settings.OPENWEBUI_DB_URL,
+    pool_pre_ping=True,
+    pool_recycle=300,
+    echo=settings.DEBUG
+)
+
 # 创建会话工厂
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+OpenWebUISessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=openwebui_engine)
 
 # 创建基类
 Base = declarative_base()
@@ -27,9 +36,20 @@ Base = declarative_base()
 
 def get_db() -> Generator[Session, None, None]:
     """
-    获取数据库会话
+    获取数据库会话（三员管理系统自己的数据库）
     """
     db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_openwebui_db() -> Generator[Session, None, None]:
+    """
+    获取 OpenWebUI 数据库会话（只读，用于查询审计日志）
+    """
+    db = OpenWebUISessionLocal()
     try:
         yield db
     finally:
@@ -105,20 +125,33 @@ def create_extension_tables():
                 );
             """))
 
-            # 创建审计日志表
+            # 创建审计日志表（与 OpenWebUI 的 audit_logs 表结构一致）
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS audit_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id VARCHAR(100),
-                    username VARCHAR(100),
-                    action VARCHAR(100) NOT NULL,
-                    resource_type VARCHAR(100),
-                    resource_id VARCHAR(100),
-                    details TEXT,
-                    ip_address VARCHAR(45),
+                    id VARCHAR(255) PRIMARY KEY,
+                    timestamp BIGINT NOT NULL,
+                    user_id VARCHAR(255),
+                    user_name VARCHAR(255),
+                    user_email VARCHAR(255),
+                    user_role VARCHAR(100),
+                    verb VARCHAR(100) NOT NULL,
+                    request_uri TEXT NOT NULL,
+                    response_status_code INTEGER,
+                    source_ip VARCHAR(45),
                     user_agent TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    request_object TEXT,
+                    response_object TEXT,
+                    created_at BIGINT,
+                    processing_time INTEGER
                 );
+            """))
+            
+            # 创建索引
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
             """))
 
             logger.info("数据库扩展表创建成功")

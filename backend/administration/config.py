@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     # Open WebUI集成配置
     OPENWEBUI_URL: str = os.getenv("OPENWEBUI_URL", "http://localhost:3000")
     OPENWEBUI_API_KEY: Optional[str] = os.getenv("OPENWEBUI_API_KEY")
+    # OpenWebUI数据库配置（用于读取审计日志）
+    OPENWEBUI_DB_URL: str = os.getenv(
+        "OPENWEBUI_DB_URL",
+        "sqlite:///../../../data/webui.db"  # 默认相对路径
+    )
 
     # 安全配置
     PASSWORD_MIN_LENGTH: int = 8

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timedelta
 
-from utils.database import get_db
+from utils.database import get_db, get_openwebui_db
 from utils.auth import AuthManager
 
 router = APIRouter(prefix="/api/audit-admin", tags=["审计管理员"])
@@ -113,7 +113,7 @@ async def get_audit_logs(
     user_role: Optional[str] = None,
     action_type: Optional[str] = None,
     current_user: dict = Depends(AuthManager.get_current_audit_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_openwebui_db)
 ):
     """
     获取审计日志列表
@@ -177,7 +177,7 @@ async def get_audit_statistics(
     start_time: Optional[int] = None,
     end_time: Optional[int] = None,
     current_user: dict = Depends(AuthManager.get_current_audit_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_openwebui_db)
 ):
     """
     获取审计统计信息
@@ -206,7 +206,7 @@ async def get_recent_logs(
     hours: int = 24,
     limit: int = 100,
     current_user: dict = Depends(AuthManager.get_current_audit_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_openwebui_db)
 ):
     """
     获取最近的审计日志
@@ -246,7 +246,7 @@ async def get_recent_logs(
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
     current_user: dict = Depends(AuthManager.get_current_audit_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_openwebui_db)
 ):
     """
     获取审计概览统计
@@ -295,7 +295,7 @@ async def get_dashboard_stats(
 async def cleanup_old_logs(
     days: int = 90,
     current_user: dict = Depends(AuthManager.get_current_audit_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_openwebui_db)
 ):
     """
     清理旧的审计日志
