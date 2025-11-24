@@ -1,3 +1,10 @@
+environments/*
+.claude/*
+**/.spec-workflow
+**/.spec-workflow/**
+**/venv
+**/node_modules
+
 x.py
 yarn.lock
 .DS_Store
