@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # 三员管理系统后端
+  admin-backend:
+    build:
+      context: ./backend/administration
+      dockerfile: Dockerfile
+    container_name: openwebui-admin-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - ADMIN_DB_URL=sqlite:///./data/admin_management.db
+      - ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET:-change-this-secret-in-production}
+      - OPENWEBUI_URL=${OPENWEBUI_URL:-http://openwebui:3000}
+      - OPENWEBUI_API_KEY=${OPENWEBUI_API_KEY:-}
+    volumes:
+      - admin-data:/app/data
+    restart: unless-stopped
+    networks:
+      - admin-network
+
+  # 三员管理系统前端
+  admin-frontend:
+    build:
+      context: ./frontend/administration
+      dockerfile: Dockerfile
+    container_name: openwebui-admin-frontend
+    ports:
+      - "3002:80"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:3001/api
+    depends_on:
+      - admin-backend
+    restart: unless-stopped
+    networks:
+      - admin-network
+
+networks:
+  admin-network:
+    driver: bridge
+
+volumes:
+  admin-data:

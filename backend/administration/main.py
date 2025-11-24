@@ -7,6 +7,7 @@ from config import settings
 from utils.database import init_database, get_db
 from models.admin_users import AdminUser
 from routers import auth, sys_admin, auth_admin, audit_admin
+from middleware import AuditMiddleware
 
 # 配置日志
 logging.basicConfig(
@@ -32,6 +33,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 添加审计中间件
+app.add_middleware(AuditMiddleware)
 
 
 @app.on_event("startup")
@@ -81,7 +85,8 @@ async def health_check(db: Session = Depends(get_db)):
     """
     try:
         # 检查数据库连接
-        db.execute("SELECT 1")
+        from sqlalchemy import text
+        db.execute(text("SELECT 1"))
 
         return {
             "status": "healthy",

@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timedelta
 import uuid
+import requests
 
 from utils.database import get_db
 from utils.auth import AuthManager
@@ -75,11 +77,11 @@ async def get_api_keys(
     """
     try:
         result = db.execute(
-            """
+            text("""
             SELECT id, name, api_key, created_by, created_at, expires_at, is_active
             FROM admin_api_keys
             ORDER BY created_at DESC
-            """
+            """)
         ).fetchall()
 
         api_keys = [
@@ -124,11 +126,11 @@ async def create_api_key(
 
         # 插入数据库
         result = db.execute(
-            """
+            text("""
             INSERT INTO admin_api_keys (name, api_key, created_by, expires_at)
             VALUES (:name, :api_key, :created_by, :expires_at)
             RETURNING id, name, api_key, created_by, created_at, expires_at, is_active
-            """,
+            """),
             {
                 "name": request.name,
                 "api_key": api_key,
@@ -168,11 +170,11 @@ async def delete_api_key(
     """
     try:
         result = db.execute(
-            """
+            text("""
             DELETE FROM admin_api_keys
             WHERE id = :id
             RETURNING id
-            """,
+            """),
             {"id": api_key_id}
         ).fetchone()
 
@@ -207,11 +209,11 @@ async def validate_api_key(
     """
     try:
         result = db.execute(
-            """
+            text("""
             SELECT name, expires_at, is_active
             FROM admin_api_keys
             WHERE api_key = :api_key
-            """,
+            """),
             {"api_key": api_key}
         ).fetchone()
 
@@ -281,18 +283,18 @@ async def get_dashboard_stats(
     try:
         # API Key统计
         api_key_stats = db.execute(
-            """
+            text("""
             SELECT
                 COUNT(*) as total,
                 COUNT(CASE WHEN is_active THEN 1 END) as active,
                 COUNT(CASE WHEN NOT is_active OR (expires_at < NOW()) THEN 1 END) as expired
             FROM admin_api_keys
-            """
+            """)
         ).fetchone()
 
         # 用户统计
         user_stats = db.execute(
-            """
+            text("""
             SELECT
                 COUNT(*) as total,
                 COUNT(CASE WHEN admin_role = 'sys_admin' THEN 1 END) as sys_admins,
@@ -300,7 +302,7 @@ async def get_dashboard_stats(
                 COUNT(CASE WHEN admin_role = 'audit_admin' THEN 1 END) as audit_admins
             FROM users
             WHERE admin_role IS NOT NULL
-            """
+            """)
         ).fetchone()
 
         return {
