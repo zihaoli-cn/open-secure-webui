@@ -54,7 +54,7 @@
             <el-card class="stat-card">
               <div class="stat-content">
                 <div class="stat-icon group-icon">
-                  <el-icon><UserGroup /></el-icon>
+                  <el-icon><Users /></el-icon>
                 </div>
                 <div class="stat-info">
                   <div class="stat-value">{{ stats.totalGroups || 0 }}</div>
@@ -224,7 +224,7 @@ import {
   User,
   Key,
   Cpu,
-  UserGroup,
+  Users,
   Lock,
   Monitor,
   Document,
